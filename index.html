@@ -255,6 +255,89 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg0); color:
 .av3{background:linear-gradient(135deg,#10b981,#059669)} .av4{background:linear-gradient(135deg,#8b5cf6,#6d28d9)}
 .av5{background:linear-gradient(135deg,#ec4899,#db2777)} .av6{background:linear-gradient(135deg,#ef4444,#dc2626)}
 .av7{background:linear-gradient(135deg,#14b8a6,#0d9488)} .av8{background:linear-gradient(135deg,#eab308,#ca8a04)}
+
+/* MOBILE BOTTOM NAV */
+.mobile-nav {
+  display:none;
+  position:fixed; bottom:0; left:0; right:0;
+  height:60px; background:var(--bg2);
+  border-top:1px solid var(--border);
+  z-index:50;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.mobile-nav-inner { display:flex; align-items:center; height:60px; }
+.mnav-btn {
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:3px; cursor:pointer; border:none; background:none;
+  color:var(--text3); font-family:'Plus Jakarta Sans',sans-serif;
+  font-size:10px; font-weight:600; letter-spacing:.3px;
+  transition:color .15s; padding:8px 0; position:relative;
+}
+.mnav-btn.active { color:var(--accent); }
+.mnav-btn.active.dm-nav { color:var(--dm-color); }
+.mnav-btn svg { width:22px; height:22px; }
+.mnav-badge {
+  position:absolute; top:6px; right:calc(50% - 18px);
+  background:var(--accent); color:white;
+  font-size:9px; font-weight:800; min-width:16px; height:16px;
+  border-radius:8px; display:flex; align-items:center; justify-content:center;
+  padding:0 4px; border:2px solid var(--bg2);
+}
+/* Mobile chat back button */
+.ch-back {
+  display:none; width:34px; height:34px; border-radius:8px;
+  background:var(--bg3); border:1px solid var(--border);
+  color:var(--text2); cursor:pointer; flex-shrink:0;
+  align-items:center; justify-content:center; transition:all .15s;
+}
+.ch-back:hover { background:var(--bg4); color:var(--text1); }
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .auth-card { width:calc(100% - 32px); padding:28px 20px; border-radius:14px; }
+  .tnav-btn, .tnav-sep { display:none; }
+  .topnav { height:50px; padding:0 12px; }
+  .tnav-logo { margin-right:0; font-size:16px; }
+  .tnav-user { gap:6px; }
+  #navName { display:none; }
+  .tnav-signout { padding:4px 8px; font-size:11px; }
+  .main { position:relative; overflow:hidden; }
+  .sidebar {
+    position:absolute; top:0; left:0; right:0; bottom:0;
+    width:100%; z-index:10;
+    transform:translateX(0);
+    transition:transform .25s cubic-bezier(.4,0,.2,1);
+  }
+  .sidebar.slide-out {
+    transform:translateX(-100%);
+    pointer-events:none;
+  }
+  .chat-area {
+    position:absolute; top:0; left:0; right:0; bottom:0;
+    width:100%;
+    transform:translateX(100%);
+    transition:transform .25s cubic-bezier(.4,0,.2,1);
+  }
+  .chat-area.slide-in { transform:translateX(0); }
+  .ch-back { display:flex; }
+  .ch-search { display:none; }
+  .ch-actions { gap:6px; }
+  .mobile-nav { display:block; }
+  .list-wrap { padding-bottom:70px; }
+  .messages-wrap { padding:12px 12px 10px; }
+  .input-area { padding:8px 10px; padding-bottom:calc(8px + env(safe-area-inset-bottom)); }
+  .msg-content { max-width:78%; }
+  .modal { width:calc(100% - 24px); padding:22px 18px 18px; }
+  .user-search-list { max-height:160px; }
+  .no-chat { padding-bottom:60px; }
+  .list-item { padding:12px 10px; }
+  .sb-tab { padding:10px 4px; font-size:13px; }
+}
+@media (max-width: 400px) {
+  .auth-card { padding:24px 16px; }
+  .bubble { font-size:14px; }
+  .msg-content { max-width:84%; }
+}
 </style>
 </head>
 <body>
@@ -344,6 +427,9 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg0); color:
       </div>
       <div id="chatView" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
         <div class="chat-header">
+          <button class="ch-back" onclick="goBackToList()" title="Kembali">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
           <div class="ch-icon" id="chIcon">💬</div>
           <div class="ch-info">
             <div class="ch-name" id="chName">-</div>
@@ -373,6 +459,24 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg0); color:
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- MOBILE BOTTOM NAV -->
+<div class="mobile-nav">
+  <div class="mobile-nav-inner">
+    <button class="mnav-btn active" id="mnavRooms" onclick="mobileNav('rooms')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      Grup
+    </button>
+    <button class="mnav-btn dm-nav" id="mnavDms" onclick="mobileNav('dms')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Pribadi
+    </button>
+    <button class="mnav-btn" id="mnavProfile" onclick="mobileNav('profile')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+      Profil
+    </button>
   </div>
 </div>
 
@@ -901,6 +1005,64 @@ function initEmojiPicker() {
     };
     container.appendChild(btn);
   });
+}
+
+// ── MOBILE NAVIGATION ──
+function isMobile() { return window.innerWidth <= 768; }
+
+window.mobileNav = (tab) => {
+  document.getElementById('mnavRooms').classList.remove('active');
+  document.getElementById('mnavDms').classList.remove('active');
+  document.getElementById('mnavProfile').classList.remove('active');
+
+  if (tab === 'rooms') {
+    document.getElementById('mnavRooms').classList.add('active');
+    switchSbTab('rooms');
+    showSidebar();
+  } else if (tab === 'dms') {
+    document.getElementById('mnavDms').classList.add('active');
+    switchSbTab('dms');
+    showSidebar();
+  } else if (tab === 'profile') {
+    document.getElementById('mnavProfile').classList.add('active');
+    showSidebar();
+    showToast((currentUser?.displayName || currentUser?.email || 'User') + ' — klik Keluar untuk logout', '👤');
+  }
+};
+
+function showSidebar() {
+  if (!isMobile()) return;
+  document.querySelector('.sidebar').classList.remove('slide-out');
+  document.querySelector('.chat-area').classList.remove('slide-in');
+}
+
+function showChatArea() {
+  if (!isMobile()) return;
+  document.querySelector('.sidebar').classList.add('slide-out');
+  document.querySelector('.chat-area').classList.add('slide-in');
+}
+
+window.goBackToList = () => {
+  showSidebar();
+};
+
+// Patch openChat to trigger mobile slide
+const _origOpenChat = openChat;
+function openChat(chat) {
+  _origOpenChat(chat);
+  showChatArea();
+  // Update mobile nav active state based on chat type
+  if (isMobile()) {
+    if (chat.type === 'dm') {
+      document.getElementById('mnavRooms').classList.remove('active');
+      document.getElementById('mnavDms').classList.add('active');
+      document.getElementById('mnavProfile').classList.remove('active');
+    } else {
+      document.getElementById('mnavRooms').classList.add('active');
+      document.getElementById('mnavDms').classList.remove('active');
+      document.getElementById('mnavProfile').classList.remove('active');
+    }
+  }
 }
 </script>
 </body>
