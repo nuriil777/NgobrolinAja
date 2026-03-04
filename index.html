@@ -512,6 +512,8 @@ window.doSignOut = async () => {
   if (roomsUnsub) roomsUnsub();
   if (dmsUnsub) dmsUnsub();
   if (messagesUnsub) messagesUnsub();
+  dmCache = {};
+  currentChat = null;
   await signOut(auth);
 };
 
@@ -572,33 +574,54 @@ function renderRoomList(rooms) {
 }
 
 // ── DMs ──
+// Firestore does not support array-contains + orderBy without a composite index,
+// so we listen with array-contains only and sort on the client.
+// We also keep a merged map so both sender & receiver see the conversation immediately.
+let dmCache = {};
+
 function listenDms() {
-  const q = query(collection(db,'dms'), where('members','array-contains',currentUser.uid), orderBy('lastActivity','desc'));
+  const q = query(collection(db,'dms'), where('members','array-contains', currentUser.uid));
   dmsUnsub = onSnapshot(q, snap => {
-    const dms = [];
-    snap.forEach(d => dms.push({id:d.id,...d.data()}));
-    renderDmList(dms);
+    snap.docChanges().forEach(change => {
+      if (change.type === 'removed') {
+        delete dmCache[change.doc.id];
+      } else {
+        dmCache[change.doc.id] = { id: change.doc.id, ...change.doc.data() };
+      }
+    });
+    const sorted = Object.values(dmCache).sort((a,b) => {
+      const ta = a.lastActivity?.toMillis?.() || 0;
+      const tb = b.lastActivity?.toMillis?.() || 0;
+      return tb - ta;
+    });
+    renderDmList(sorted);
   });
 }
 
 function renderDmList(dms) {
   const el = document.getElementById('dmList');
-  if (!dms.length) { el.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">Belum ada chat pribadi.</div>`; return; }
+  if (!dms.length) {
+    el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;line-height:1.8;">
+      Belum ada chat pribadi.<br>Klik <b style="color:var(--dm-color)">+ Mulai Chat Pribadi</b> untuk memulai.</div>`;
+    return;
+  }
   el.innerHTML = '';
   dms.forEach(dm => {
-    const otherId = dm.members.find(m => m !== currentUser.uid);
+    if (!dm.members) return;
+    const otherId = dm.members.find(m => m !== currentUser.uid) || dm.members[0];
     const otherName = dm.memberNames?.[otherId] || 'User';
     const avColor = avatarColor(otherId || 'x');
     const div = document.createElement('div');
     div.className = 'list-item type-dm' + (currentChat?.id===dm.id?' active':'');
     div.dataset.id = dm.id;
-    div.innerHTML = `
-      <div class="item-icon dm-icon ${avColor}">${initials(otherName)}</div>
-      <div class="item-meta">
-        <div class="item-name">${otherName}</div>
-        <div class="item-preview">${dm.lastMsg||'Belum ada pesan'}</div>
-      </div>
-      <div class="item-right">${dm.lastActivity?`<div class="item-time">${timeStr(dm.lastActivity)}</div>`:''}</div>`;
+    const ts = dm.lastActivity ? timeStr(dm.lastActivity) : '';
+    div.innerHTML =
+      '<div class="item-icon dm-icon ' + avColor + '">' + initials(otherName) + '</div>' +
+      '<div class="item-meta">' +
+        '<div class="item-name">' + otherName + '</div>' +
+        '<div class="item-preview">' + (dm.lastMsg || '<i style="opacity:.5">Belum ada pesan</i>') + '</div>' +
+      '</div>' +
+      '<div class="item-right">' + (ts ? '<div class="item-time">' + ts + '</div>' : '') + '</div>';
     div.onclick = () => openChat({id:dm.id, type:'dm', otherName, otherId, ...dm});
     el.appendChild(div);
   });
@@ -819,23 +842,41 @@ window.startDm = async () => {
     const dmRef = doc(db, 'dms', dmId);
     const existing = await getDoc(dmRef);
     if (!existing.exists()) {
+      // Create conversation doc — both members listed so both can query it
       await setDoc(dmRef, {
         members: [currentUser.uid, selectedDmUser.uid],
         memberNames: {
           [currentUser.uid]: currentUser.displayName || currentUser.email,
-          [selectedDmUser.uid]: selectedDmUser.displayName
+          [selectedDmUser.uid]: selectedDmUser.displayName || selectedDmUser.email
         },
         createdAt: serverTimestamp(),
         lastActivity: serverTimestamp(),
         lastMsg: ''
       });
+    } else {
+      // Ensure memberNames is up to date (handles legacy docs)
+      await updateDoc(dmRef, {
+        [`memberNames.${currentUser.uid}`]: currentUser.displayName || currentUser.email,
+        [`memberNames.${selectedDmUser.uid}`]: selectedDmUser.displayName || selectedDmUser.email,
+      });
     }
     closeModal('newDmModal');
     showToast('Chat pribadi dengan '+selectedDmUser.displayName+' dibuka!');
     switchSbTab('dms');
+    // Also add to local cache immediately so list shows without waiting for snapshot
+    dmCache[dmId] = {
+      id: dmId,
+      members: [currentUser.uid, selectedDmUser.uid],
+      memberNames: {
+        [currentUser.uid]: currentUser.displayName || currentUser.email,
+        [selectedDmUser.uid]: selectedDmUser.displayName || selectedDmUser.email
+      },
+      lastMsg: '',
+      lastActivity: { toMillis: () => Date.now() }
+    };
     openChat({
-      id:dmId, type:'dm',
-      otherName: selectedDmUser.displayName,
+      id: dmId, type: 'dm',
+      otherName: selectedDmUser.displayName || selectedDmUser.email,
       otherId: selectedDmUser.uid
     });
   } catch(e) { errEl.textContent=e.message; errEl.style.display='block'; }
